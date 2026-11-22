@@ -152,6 +152,11 @@ export class DashboardHub {
       stopLossPct: c.STOP_LOSS_PCT,
       trailingStopPct: c.TRAILING_STOP_PCT,
       useJito: c.USE_JITO,
+      momentumEnabled: c.MOMENTUM_ENABLED,
+      copyWallets: c.copyWallets.length,
+      copyBuyAmountSol: c.COPY_BUY_AMOUNT_SOL,
+      copyMaxOpen: c.COPY_MAX_OPEN_POSITIONS,
+      copyExitOnWhaleSell: c.COPY_EXIT_ON_WHALE_SELL,
     };
   }
 

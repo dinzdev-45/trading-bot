@@ -10,6 +10,7 @@ import type { Logger } from "../logger.js";
 export class PumpPortalFeed extends EventEmitter {
   private ws?: WebSocket;
   private readonly tradeKeys = new Set<string>();
+  private readonly accountKeys = new Set<string>();
   private closed = false;
   private backoffMs = 1000;
   /** True while the WebSocket is open. */
@@ -38,6 +39,13 @@ export class PumpPortalFeed extends EventEmitter {
     if (fresh.length) this.send({ method: "subscribeTokenTrade", keys: fresh });
   }
 
+  /** Receive every pump.fun trade made by these wallets (copy trading). */
+  subscribeAccounts(wallets: string[]): void {
+    const fresh = wallets.filter((w) => !this.accountKeys.has(w));
+    fresh.forEach((w) => this.accountKeys.add(w));
+    if (fresh.length) this.send({ method: "subscribeAccountTrade", keys: fresh });
+  }
+
   unsubscribeTrades(mints: string[]): void {
     const known = mints.filter((m) => this.tradeKeys.delete(m));
     if (known.length) this.send({ method: "unsubscribeTokenTrade", keys: known });
@@ -59,6 +67,7 @@ export class PumpPortalFeed extends EventEmitter {
       this.send({ method: "subscribeNewToken" });
       this.send({ method: "subscribeMigration" });
       if (this.tradeKeys.size) this.send({ method: "subscribeTokenTrade", keys: [...this.tradeKeys] });
+      if (this.accountKeys.size) this.send({ method: "subscribeAccountTrade", keys: [...this.accountKeys] });
       this.emit("open");
     });
     ws.on("message", (data) => {

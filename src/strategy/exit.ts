@@ -1,9 +1,18 @@
 import type { Config } from "../config.js";
 import type { TokenStats } from "../tracker.js";
 
+export type PositionSource = "momentum" | "copy";
+
 export interface Position {
   mint: string;
   symbol: string;
+  /** Which strategy opened it. */
+  source: PositionSource;
+  /** Copy trades: the whale we followed. */
+  whale?: string;
+  whaleLabel?: string;
+  /** Copy trades: the whale sold this fraction of their bag; mirror it on the next chance. */
+  pendingWhaleSell?: { fraction: number; reason: string };
   status: "opening" | "open" | "closed";
   openedAt: number;
   closedAt?: number;
@@ -23,7 +32,7 @@ export interface Position {
 }
 
 export interface ExitDecision {
-  kind: "full" | "take-profit" | "pre-graduation";
+  kind: "full" | "take-profit" | "pre-graduation" | "whale-sell";
   tokens: number;
   reason: string;
   closesPosition: boolean;
@@ -43,6 +52,13 @@ export function evaluateExit(
   const multiple = pos.entryPrice > 0 ? price / pos.entryPrice : 0;
 
   if (migrated) return all("graduated (migrated)");
+
+  // Copy trades follow the whale out before anything else.
+  const ws = pos.pendingWhaleSell;
+  if (ws) {
+    const tokens = Math.min(pos.tokensHeld, pos.tokensHeld * ws.fraction);
+    return { kind: "whale-sell", tokens, reason: ws.reason, closesPosition: tokens >= pos.tokensHeld };
+  }
 
   if (!pos.preGradSold && cfg.GRADUATION_SELL_FRACTION > 0 && progress >= cfg.GRADUATION_SELL_PROGRESS) {
     const tokens = Math.min(pos.tokensHeld, pos.tokensHeld * cfg.GRADUATION_SELL_FRACTION);

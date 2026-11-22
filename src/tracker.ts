@@ -26,6 +26,11 @@ export interface TokenState {
   lastBuyAt: number;
   tradeCount: number;
   migrated: boolean;
+  /**
+   * True when the bot did not see the token's creation (picked up from a whale's trade):
+   * holder balances and dev activity before that moment are unknown.
+   */
+  adopted: boolean;
 }
 
 export interface TokenStats {
@@ -65,6 +70,7 @@ export class TokenTracker {
       lastBuyAt: now,
       tradeCount: 0,
       migrated: false,
+      adopted: false,
     };
     if (ev.initialBuy && ev.initialBuy > 0) {
       st.balances.set(ev.traderPublicKey, ev.initialBuy);
@@ -107,6 +113,34 @@ export class TokenTracker {
     return st;
   }
 
+  /** Start tracking a token we never saw created, from a trade on it (copy trading). */
+  adopt(ev: TradeEvent, now: number): TokenState | undefined {
+    if (typeof ev.vSolInBondingCurve !== "number" || typeof ev.vTokensInBondingCurve !== "number") return undefined;
+    const st: TokenState = {
+      mint: ev.mint,
+      name: "",
+      symbol: "",
+      uri: "",
+      dev: "",
+      createdAt: now,
+      vSol: ev.vSolInBondingCurve,
+      vTokens: ev.vTokensInBondingCurve,
+      lastUpdate: now,
+      balances: new Map(),
+      recentTrades: [],
+      earlyBuyers: new Set(),
+      devSold: false,
+      lastBuyAt: now,
+      tradeCount: 0,
+      migrated: false,
+      adopted: true,
+    };
+    // Bundle detection is meaningless without the launch, so start "after" the window.
+    st.createdAt = now - this.opts.bundleWindowSec * 1000 - 1;
+    this.tokens.set(ev.mint, st);
+    return this.onTrade(ev, now);
+  }
+
   markMigrated(mint: string): TokenState | undefined {
     const st = this.tokens.get(mint);
     if (st) st.migrated = true;
@@ -117,7 +151,8 @@ export class TokenTracker {
     this.tokens.delete(mint);
   }
 
-  stats(st: TokenState, now: number, windowSec: number): TokenStats {
+  /** `exclude`: wallets left out of the top-10 and early-buyer concentration (e.g. the whales we copy). */
+  stats(st: TokenState, now: number, windowSec: number, exclude?: ReadonlySet<string>): TokenStats {
     const cutoff = now - windowSec * 1000;
     const buyers = new Set<string>();
     let buyVol = 0;
@@ -131,12 +166,12 @@ export class TokenTracker {
     }
     const pct = (tokens: number) => (tokens / TOTAL_SUPPLY) * 100;
     const holders = [...st.balances.entries()]
-      .filter(([w]) => w !== this.opts.selfWallet)
+      .filter(([w]) => w !== this.opts.selfWallet && !exclude?.has(w))
       .map(([, b]) => b)
       .sort((a, b) => b - a);
     const top10 = holders.slice(0, 10).reduce((s, b) => s + b, 0);
     let early = 0;
-    for (const w of st.earlyBuyers) early += st.balances.get(w) ?? 0;
+    for (const w of st.earlyBuyers) if (!exclude?.has(w)) early += st.balances.get(w) ?? 0;
     return {
       ageSec: (now - st.createdAt) / 1000,
       uniqueBuyers: buyers.size,
