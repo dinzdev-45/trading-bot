@@ -45,6 +45,29 @@ Bot mencetak ringkasan tiap menit (saldo simulasi, PnL, win rate). Semua trade d
 
 Simulasi menghitung harga dengan rumus bonding curve pump.fun, ditambah fee pump.fun, priority fee, tip Jito, dan slippage ekstra (`PAPER_EXTRA_SLIPPAGE_PCT`) untuk meniru keterlambatan. Hasil nyata tetap bisa berbeda.
 
+## Dashboard
+
+Saat bot berjalan (`npm start`), dashboard web ikut menyala. Buka alamat yang dicetak di terminal, biasanya **http://localhost:3000**.
+
+Isinya, diperbarui langsung tiap detik:
+
+- saldo/ekuitas, PnL terealisasi, PnL hari ini (dengan batas rugi harian), win rate, jumlah posisi, kesehatan feed
+- grafik ekuitas (15 menit / 1 jam / 6 jam / semua) dan grafik PnL per trade
+- tabel posisi terbuka: modal, nilai sekarang, PnL, progres curve, durasi
+- riwayat trade (juga dari sesi sebelumnya, dibaca dari `data/trades-*.jsonl`) dan log aktivitas
+
+Dashboard hanya bisa dibuka dari komputer kamu sendiri (terikat ke `127.0.0.1`), hanya-baca, dan tidak pernah menampilkan private key atau URL RPC. Matikan dengan `DASHBOARD_ENABLED=false`.
+
+### Mode demo
+
+Mau lihat dashboard tanpa menunggu sinyal sungguhan, atau tanpa internet?
+
+```bash
+npm run demo
+```
+
+Bot berjalan dengan feed **acak buatan** (token palsu yang naik, turun, dan rug pull) dalam mode paper. Hasilnya tidak berarti apa-apa untuk pasar nyata; trade demo dicatat terpisah di `data/trades-demo.jsonl`.
+
 ## Rekam dan replay (untuk mencari setelan terbaik)
 
 Rekam data live ke file:
@@ -86,7 +109,9 @@ Struktur:
 
 | File | Isi |
 | --- | --- |
-| `src/index.ts` | CLI (`run`, `replay`) |
+| `src/index.ts` | CLI (`run`, `demo`, `replay`) |
+| `src/dashboard/` | server dashboard (HTTP + SSE) dan halaman web |
+| `src/demo.ts` | feed acak buatan untuk `npm run demo` |
 | `src/bot.ts` | orkestrasi: masuk, keluar, risiko, ringkasan |
 | `src/tracker.ts` | state per token dan statistik |
 | `src/strategy/entry.ts` | filter masuk dan cek keamanan |

@@ -12,6 +12,8 @@ export class PumpPortalFeed extends EventEmitter {
   private readonly tradeKeys = new Set<string>();
   private closed = false;
   private backoffMs = 1000;
+  /** True while the WebSocket is open. */
+  connected = false;
 
   constructor(
     private readonly url: string,
@@ -52,6 +54,7 @@ export class PumpPortalFeed extends EventEmitter {
 
     ws.on("open", () => {
       this.backoffMs = 1000;
+      this.connected = true;
       this.log.info("feed connected");
       this.send({ method: "subscribeNewToken" });
       this.send({ method: "subscribeMigration" });
@@ -67,6 +70,7 @@ export class PumpPortalFeed extends EventEmitter {
     });
     ws.on("error", (err) => this.log.warn(`feed error: ${err.message}`));
     ws.on("close", () => {
+      this.connected = false;
       if (this.closed) return;
       this.log.warn(`feed disconnected, reconnecting in ${this.backoffMs / 1000}s`);
       setTimeout(() => this.connect(), this.backoffMs);
