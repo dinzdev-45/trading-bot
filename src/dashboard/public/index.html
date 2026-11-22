@@ -134,6 +134,12 @@ tbody tr:hover td { background: var(--surface-2); }
 .tag.win { background: rgba(34,197,94,.15); color: var(--up-ink); }
 .tag.loss { background: rgba(239,68,68,.15); color: var(--down-ink); }
 .tag.fail { background: var(--chip); color: var(--muted); }
+.src { display: inline-block; font-size: 10px; font-weight: 650; padding: 1px 6px; border-radius: 4px; letter-spacing: .03em; margin-top: 3px; width: fit-content; }
+.src.copy { background: rgba(168,85,247,.16); color: #b98af5; }
+.src.momentum { background: var(--chip); color: var(--muted); }
+.whale-addr { color: var(--muted); font-size: 11px; text-decoration: none; }
+.whale-addr:hover { color: var(--ink-2); text-decoration: underline; }
+.note { color: var(--ink-2); max-width: 300px; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; }
 .reason { color: var(--ink-2); max-width: 340px; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; }
 .prog { display: flex; align-items: center; gap: 8px; min-width: 120px; }
 .prog .bar { flex: 1; height: 6px; border-radius: 6px; background: var(--grid); position: relative; overflow: hidden; }
@@ -207,10 +213,15 @@ tbody tr:hover td { background: var(--surface-2); }
     <div class="card-head"><h2>Posisi terbuka</h2><div class="spacer"></div><span class="sub" id="openSub"></span></div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>Token</th><th class="r">Modal</th><th class="r">Nilai sekarang</th><th class="r">PnL</th><th>Progres curve</th><th class="r">TP kena</th><th class="r">Durasi</th></tr></thead>
+        <thead><tr><th>Token</th><th>Strategi</th><th class="r">Modal</th><th class="r">Nilai sekarang</th><th class="r">PnL</th><th>Progres curve</th><th class="r">TP kena</th><th class="r">Durasi</th></tr></thead>
         <tbody id="openBody"></tbody>
       </table>
     </div>
+  </section>
+
+  <section class="card" style="margin-bottom:12px">
+    <div class="card-head"><h2>Whale yang diikuti</h2><div class="spacer"></div><span class="sub" id="whaleSub"></span></div>
+    <div class="table-wrap" id="whaleWrap"></div>
   </section>
 
   <section class="row two">
@@ -269,9 +280,14 @@ const tokenCell = (symbol, mint) => {
   return `<div class="tok">${name}<a class="mono" href="https://pump.fun/coin/${mint}" target="_blank" rel="noopener noreferrer">${shortMint(mint)} ↗</a></div>`;
 };
 const REASONS = [
-  [/take-profit/i, "take-profit"], [/trailing/i, "trailing stop"], [/stop-loss/i, "stop-loss"],
+  [/whale/i, "whale jual"], [/take-profit/i, "take-profit"], [/trailing/i, "trailing stop"], [/stop-loss/i, "stop-loss"],
   [/momentum/i, "momentum mati"], [/max hold/i, "batas waktu"], [/gradua|migrat/i, "jelang lulus"],
 ];
+
+const srcCell = (t) => t.source === "copy"
+  ? `<span class="src copy" title="${esc(t.whale || "")}">COPY · ${esc(t.whaleLabel || shortMint(t.whale))}</span>`
+  : `<span class="src momentum">MOMENTUM</span>`;
+const ago = (sec) => (sec < 60 ? `${Math.max(0, Math.round(sec))}d lalu` : sec < 3600 ? `${Math.floor(sec / 60)}m lalu` : `${Math.floor(sec / 3600)}j lalu`);
 
 // ------------------------------------------------------------------ state
 const S = { state: null, equity: [], trades: [], logs: [], range: 60, hist: "closed", logView: "trade", connected: false };
@@ -355,7 +371,39 @@ function renderState() {
 
   $("uptime").textContent = `berjalan ${dur((st.now - st.startedAt) / 1000)}`;
   renderOpen();
+  renderWhales();
   renderSettings();
+}
+
+function renderWhales() {
+  const s = S.state.summary, set = S.state.settings, now = S.state.now;
+  const wrap = $("whaleWrap");
+  const cl = closes();
+  const byStrat = (src) => cl.filter((t) => (t.source || "momentum") === src);
+  const sum = (rows) => rows.reduce((a, t) => a + (t.pnlSol || 0), 0);
+  const cp = byStrat("copy"), mo = byStrat("momentum");
+  $("whaleSub").innerHTML = cl.length
+    ? `copy ${cp.length} trade · <span class="${cls(sum(cp))}">${signed(sum(cp))} SOL</span> &nbsp;|&nbsp; momentum ${mo.length} trade · <span class="${cls(sum(mo))}">${signed(sum(mo))} SOL</span>`
+    : "";
+  if (!s.whales || !s.whales.length) {
+    const html = `<div class="none">Copy trading belum aktif. Isi <span class="mono">COPY_WALLETS</span> di file .env dengan alamat wallet whale, lalu jalankan ulang bot.<br>Belum punya daftar? Rekam feed dengan <span class="mono">RECORD_FILE</span> lalu jalankan <span class="mono">npm run whales -- data/rekaman.jsonl</span>.</div>`;
+    if (wrap.innerHTML !== html) wrap.innerHTML = html;
+    return;
+  }
+  const rows = s.whales.map((w) => {
+    const mine = cp.filter((t) => t.whale === w.address);
+    const wins = mine.filter((t) => t.pnlSol > 0).length;
+    return { w, n: mine.length, wins, pnl: sum(mine) };
+  }).sort((a, b) => b.pnl - a.pnl || b.w.lastAt - a.w.lastAt);
+  wrap.innerHTML = `<table><thead><tr><th>Whale</th><th class="r">Beli / jual (sesi ini)</th><th class="r">Disalin</th><th class="r">Trade selesai</th><th class="r">Win rate</th><th class="r">PnL copy</th><th>Terakhir</th></tr></thead><tbody>${rows.map(({ w, n, wins, pnl }) => `<tr>
+    <td><div class="tok"><b>${esc(w.label)}</b>${isMint(w.address) ? `<a class="whale-addr mono" href="https://solscan.io/account/${w.address}" target="_blank" rel="noopener noreferrer">${shortMint(w.address)} ↗</a>` : `<span class="mono">${esc(shortMint(w.address))}</span>`}</div></td>
+    <td class="r num">${w.buys} / ${w.sells}</td>
+    <td class="r num">${w.copied}${w.skipped ? `<div class="sub">${w.skipped} dilewati</div>` : ""}</td>
+    <td class="r num">${n}</td>
+    <td class="r num">${n ? ((wins / n) * 100).toFixed(0) + "%" : "–"}</td>
+    <td class="r num ${cls(pnl)}"><b>${n ? signed(pnl) : "–"}</b></td>
+    <td>${w.lastAt ? `<span class="note" title="${esc(w.lastNote)}">${esc(w.lastNote)}</span><div class="sub">${ago((now - w.lastAt) / 1000)}</div>` : `<span class="sub">belum ada trade</span>`}</td>
+  </tr>`).join("")}</tbody></table>`;
 }
 function setVal(id, text, unit, c) {
   const el = $(id);
@@ -367,7 +415,8 @@ function renderOpen() {
   const s = S.state.summary, now = S.state.now;
   $("openSub").textContent = s.openPositions.length ? "nilai dihitung dari harga curve saat ini" : "";
   if (!s.openPositions.length) {
-    $("openBody").innerHTML = `<tr><td colspan="7" class="none">Tidak ada posisi terbuka. Bot sedang mencari token dengan momentum.</td></tr>`;
+    const what = [s.strategies?.momentum !== false && "token dengan momentum", s.strategies?.copy && "pembelian whale"].filter(Boolean).join(" dan ");
+    $("openBody").innerHTML = `<tr><td colspan="8" class="none">Tidak ada posisi terbuka. Bot sedang menunggu ${esc(what)}.</td></tr>`;
     return;
   }
   $("openBody").innerHTML = s.openPositions.map((p) => {
@@ -375,6 +424,7 @@ function renderOpen() {
     const prog = Math.max(0, Math.min(100, p.curveProgressPct));
     return `<tr>
       <td>${tokenCell(p.symbol, p.mint)}</td>
+      <td>${srcCell(p)}</td>
       <td class="r num">${sol(p.solSpent)}</td>
       <td class="r num">${sol(p.valueSol)}${p.solReceived > 0 ? `<div class="sub">+${sol(p.solReceived)} sudah dijual</div>` : ""}</td>
       <td class="r num ${cls(p.pnlPct)}"><b>${arrow(p.pnlPct)}${signed(p.pnlPct, 1)}%</b><div class="sub ${cls(pnlSol)}">${signed(pnlSol)} SOL</div></td>
@@ -393,6 +443,9 @@ function renderSettings() {
     ["Batas rugi harian", `${set.maxDailyLossSol} SOL`], ["Jito", set.useJito ? "aktif" : "mati"],
   ];
   if (set.mode !== "live") items.unshift(["Saldo awal", `${set.startingBalanceSol} SOL`]);
+  items.push(["Momentum", set.momentumEnabled === false ? "mati" : "aktif"]);
+  items.push(["Copy whale", set.copyWallets ? `${set.copyWallets} wallet · ${set.copyBuyAmountSol} SOL/copy` : "mati"]);
+  if (set.copyWallets) items.push(["Ikut whale jual", set.copyExitOnWhaleSell ? "ya" : "tidak"]);
   const html = items.map(([k, v]) => `<span class="chip">${esc(k)} <b>${esc(v)}</b></span>`).join("");
   if ($("settings").innerHTML !== html) $("settings").innerHTML = html;
 }
@@ -409,23 +462,26 @@ function shortReason(reasons) {
 function renderHistory() {
   const head = $("histHead"), body = $("histBody");
   if (S.hist === "closed") {
-    head.innerHTML = `<tr><th>Waktu</th><th>Token</th><th>Hasil</th><th class="r">Modal</th><th class="r">PnL</th><th class="r">Durasi</th><th>Alasan keluar</th></tr>`;
+    head.innerHTML = `<tr><th>Waktu</th><th>Token</th><th>Strategi</th><th>Hasil</th><th class="r">Modal</th><th class="r">PnL</th><th class="r">Durasi</th><th>Alasan keluar</th></tr>`;
     const rows = closes().slice(-200).reverse();
     body.innerHTML = rows.length ? rows.map((t) => `<tr>
       <td class="num">${dateTime(t.t)}</td>
       <td>${tokenCell(t.symbol, t.mint)}</td>
+      <td>${srcCell(t)}</td>
       <td><span class="tag ${t.pnlSol > 0 ? "win" : "loss"}">${t.pnlSol > 0 ? "MENANG" : "KALAH"}</span></td>
       <td class="r num">${sol(t.solSpent)}</td>
       <td class="r num ${cls(t.pnlSol)}"><b>${signed(t.pnlSol)}</b><div class="sub">${signed(t.pnlPct, 1)}%</div></td>
       <td class="r num">${dur(t.holdSec)}</td>
       <td><span class="reason" title="${esc((t.reasons || []).join(" → "))}">${esc(shortReason(t.reasons))}</span></td>
-    </tr>`).join("") : `<tr><td colspan="7" class="none">Belum ada trade yang selesai.</td></tr>`;
+    </tr>`).join("") : `<tr><td colspan="8" class="none">Belum ada trade yang selesai.</td></tr>`;
   } else {
     head.innerHTML = `<tr><th>Waktu</th><th>Aksi</th><th>Token</th><th class="r">SOL</th><th>Detail</th></tr>`;
     const rows = S.trades.slice(-300).reverse();
     body.innerHTML = rows.length ? rows.map((t) => {
       let tag, amt = "", detail = "";
-      if (t.type === "buy") { tag = `<span class="tag buy">BELI</span>`; amt = `−${sol(t.sol)}`; detail = t.signal ? `curve ${t.signal.progressPct}% · ${t.signal.uniqueBuyers} pembeli · vol ${t.signal.buyVolSol} SOL` : ""; }
+      if (t.type === "buy") { tag = `<span class="tag buy">BELI</span>`; amt = `−${sol(t.sol)}`; detail = !t.signal ? "" : t.source === "copy"
+        ? `ikut ${t.whaleLabel} (whale beli ${t.signal.whaleSol} SOL) · curve ${t.signal.progressPct}% · jeda ${t.signal.delaySec}d`
+        : `curve ${t.signal.progressPct}% · ${t.signal.uniqueBuyers} pembeli · vol ${t.signal.buyVolSol} SOL`; }
       else if (t.type === "sell") { tag = `<span class="tag sell">JUAL</span>`; amt = `+${sol(t.sol)}`; detail = t.reason || ""; }
       else if (t.type === "close") { tag = `<span class="tag ${t.pnlSol > 0 ? "win" : "loss"}">TUTUP</span>`; amt = `<span class="${cls(t.pnlSol)}">${signed(t.pnlSol)}</span>`; detail = `${signed(t.pnlPct, 1)}% setelah ${dur(t.holdSec)}`; }
       else { tag = `<span class="tag fail">GAGAL</span>`; detail = t.error || ""; }
@@ -435,7 +491,7 @@ function renderHistory() {
 }
 
 // ------------------------------------------------------------------ logs
-const TRADE_LOG = /^(BUY signal|BOUGHT|SELL|SOLD|CLOSED|buy .* failed|sell .* failed|daily loss|LIVE|DEMO|dashboard|feed )/;
+const TRADE_LOG = /^(BUY signal|COPY|WHALE|BOUGHT|SELL|SOLD|CLOSED|buy .* failed|sell .* failed|daily loss|LIVE|DEMO|dashboard|feed |copy trading)/;
 function renderLogs() {
   const el = $("log");
   const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 30;
@@ -601,7 +657,7 @@ function stream() {
   es = new EventSource("/api/stream");
   es.addEventListener("state", (e) => { S.state = JSON.parse(e.data); renderState(); });
   es.addEventListener("equity", (e) => { S.equity.push(JSON.parse(e.data)); if (S.equity.length > 20000) S.equity.shift(); drawEquity(); });
-  es.addEventListener("trade", (e) => { S.trades.push(JSON.parse(e.data)); renderHistory(); drawPnl(); });
+  es.addEventListener("trade", (e) => { S.trades.push(JSON.parse(e.data)); renderHistory(); drawPnl(); if (S.state) renderWhales(); });
   es.addEventListener("log", (e) => { S.logs.push(JSON.parse(e.data)); if (S.logs.length > 400) S.logs.splice(0, 100); renderLogs(); });
   es.onerror = () => { es.close(); disconnected(); };
 }

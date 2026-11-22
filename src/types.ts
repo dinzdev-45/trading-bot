@@ -46,6 +46,16 @@ export interface Socials {
   website?: string;
 }
 
+/** What the bot can learn about a token it never saw created (pump.fun coin API). */
+export interface CoinInfo {
+  name?: string;
+  symbol?: string;
+  uri?: string;
+  creator?: string;
+  /** Socials when the API includes them; undefined = look them up from `uri`. */
+  socials?: Socials | null;
+}
+
 export function parseFeedMessage(raw: unknown): FeedEvent | null {
   if (!raw || typeof raw !== "object") return null;
   const m = raw as Record<string, unknown>;

@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import type { WatchedWallet } from "./config.js";
 
 /**
  * Synthetic PumpPortal-shaped feed for `npm run demo`: tokens are created, pumped, dumped and rugged
@@ -20,6 +21,23 @@ interface DemoToken {
   peakProgress: number;
   budget: number; // dud: buys left
   dev: string;
+  /** When the pump ended (dump/dead), for whales reacting late. */
+  endedAt: number;
+  whales: { wallet: string; buyAt: number; sol: number; bought: boolean; sellDelayMs: number; sold: boolean }[];
+}
+
+/**
+ * Demo whales: the first picks runners most of the time and sells early,
+ * the second is average, the third mostly buys duds and rugs and sells late.
+ */
+const WHALE_SKILL = [
+  { runner: 0.55, dud: 0.04, rug: 0.02, delay: [0, 3_000] },
+  { runner: 0.3, dud: 0.15, rug: 0.1, delay: [3_000, 12_000] },
+  { runner: 0.12, dud: 0.3, rug: 0.35, delay: [10_000, 40_000] },
+] as const;
+
+export function demoWhales(): WatchedWallet[] {
+  return ["Demo Whale A", "Demo Whale B", "Demo Whale C"].map((label) => ({ address: id(44), label }));
 }
 
 const INITIAL_V_TOKENS = 1_073_000_000;
@@ -44,6 +62,11 @@ export class DemoFeed extends EventEmitter {
   connected = false;
   private readonly tokens = new Map<string, DemoToken>();
   private readonly subscribed = new Set<string>();
+  private readonly accounts = new Set<string>();
+
+  constructor(private readonly whales: WatchedWallet[] = []) {
+    super();
+  }
   private timer?: NodeJS.Timeout;
   private lastSpawn = 0;
   private sig = 0;
@@ -60,6 +83,10 @@ export class DemoFeed extends EventEmitter {
 
   subscribeTrades(mints: string[]): void {
     mints.forEach((m) => this.subscribed.add(m));
+  }
+
+  subscribeAccounts(wallets: string[]): void {
+    wallets.forEach((w) => this.accounts.add(w));
   }
 
   unsubscribeTrades(mints: string[]): void {
@@ -90,7 +117,22 @@ export class DemoFeed extends EventEmitter {
       peakProgress: Math.random() < 0.45 ? rand(0.36, 0.5) : rand(0.55, 0.97),
       budget: Math.floor(rand(3, 12)),
       dev: id(44),
+      endedAt: 0,
+      whales: [],
     };
+    this.whales.forEach((w, i) => {
+      const skill = WHALE_SKILL[i % WHALE_SKILL.length]!;
+      if (Math.random() >= skill[kind]) return;
+      tok.whales.push({
+        wallet: w.address,
+        // Rugs and duds: whales buy into the launch. Runners: right as the pump starts.
+        buyAt: kind === "runner" ? rand(3_600, 8_000) : rand(1_000, 2_500),
+        sol: rand(0.8, 2.5),
+        bought: false,
+        sellDelayMs: rand(skill.delay[0], skill.delay[1]),
+        sold: false,
+      });
+    });
     this.tokens.set(tok.mint, tok);
     const sym = symbol();
     const devTokens = this.applyBuy(tok, rand(0.1, 0.4));
@@ -117,6 +159,16 @@ export class DemoFeed extends EventEmitter {
 
   private advance(tok: DemoToken, now: number): void {
     const age = now - tok.createdAt;
+    if (tok.phase !== "pump" && !tok.endedAt) tok.endedAt = now;
+    for (const w of tok.whales) {
+      if (!w.bought && age >= w.buyAt && tok.phase !== "dead") {
+        w.bought = true;
+        this.buy(tok, w.wallet, w.sol);
+      } else if (w.bought && !w.sold && tok.endedAt && now - tok.endedAt >= w.sellDelayMs) {
+        w.sold = true;
+        this.sell(tok, w.wallet, 1);
+      }
+    }
     if (tok.phase === "dead") {
       if (age > 20 * 60_000) this.tokens.delete(tok.mint);
       return;
@@ -195,7 +247,8 @@ export class DemoFeed extends EventEmitter {
   }
 
   private trade(tok: DemoToken, txType: "buy" | "sell", wallet: string, sol: number, tokens: number, bal: number): void {
-    if (!this.subscribed.has(tok.mint)) return; // like PumpPortal: only subscribed tokens
+    // Like PumpPortal: only subscribed tokens, plus every trade of subscribed accounts.
+    if (!this.subscribed.has(tok.mint) && !this.accounts.has(wallet)) return;
     this.emit("message", {
       txType,
       signature: this.signature(),

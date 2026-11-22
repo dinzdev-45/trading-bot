@@ -1,4 +1,38 @@
+import { existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
+
+export interface WatchedWallet {
+  address: string;
+  label: string;
+}
+
+const BASE58_ADDRESS = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+/**
+ * Parse a whale list. Entries are separated by commas or new lines; each is either
+ * `ADDRESS` or `label:ADDRESS` (or `ADDRESS label` in a file). `#` starts a comment.
+ */
+export function parseWalletList(raw: string): WatchedWallet[] {
+  const out = new Map<string, WatchedWallet>();
+  for (let line of raw.split(/[\n,]/)) {
+    line = line.replace(/#.*$/, "").trim();
+    if (!line) continue;
+    let address: string;
+    let label = "";
+    if (line.includes(":")) {
+      const i = line.lastIndexOf(":");
+      label = line.slice(0, i).trim();
+      address = line.slice(i + 1).trim();
+    } else {
+      const [a, ...rest] = line.split(/\s+/);
+      address = a!;
+      label = rest.join(" ");
+    }
+    if (!BASE58_ADDRESS.test(address)) throw new Error(`Invalid wallet address in copy list: "${address}"`);
+    out.set(address, { address, label: label || `${address.slice(0, 4)}…${address.slice(-4)}` });
+  }
+  return [...out.values()];
+}
 
 /** Parse "2:0.5,4:0.25" into [{ multiple: 2, fraction: 0.5 }, ...]. */
 export function parseTakeProfitLevels(raw: string): { multiple: number; fraction: number }[] {
@@ -84,6 +118,26 @@ const schema = z.object({
   STARTING_BALANCE_SOL: num.positive().default(5),
   SUMMARY_INTERVAL_SEC: num.positive().default(60),
 
+  // Strategies
+  MOMENTUM_ENABLED: bool.default(true),
+
+  // Copy trading (follow whale wallets)
+  COPY_WALLETS: z.string().default(""),
+  COPY_WALLETS_FILE: z.string().default(""),
+  COPY_BUY_AMOUNT_SOL: num.positive().default(0.05),
+  COPY_MIN_WHALE_BUY_SOL: num.min(0).default(0.5),
+  COPY_MAX_CURVE_PROGRESS: num.min(0).max(1).default(0.8),
+  COPY_MAX_PRICE_MOVE_PCT: num.min(0).default(25),
+  COPY_SIGNAL_TTL_SEC: num.positive().default(15),
+  COPY_MAX_TOP10_HOLD_PCT: num.min(0).max(100).default(50),
+  COPY_REQUIRE_SOCIALS: bool.default(false),
+  COPY_SKIP_IF_WHALE_IS_DEV: bool.default(true),
+  COPY_ADOPT_UNSEEN_TOKENS: bool.default(true),
+  PUMPFUN_API_URL: z.string().default("https://frontend-api-v3.pump.fun"),
+  COPY_EXIT_ON_WHALE_SELL: bool.default(true),
+  COPY_WHALE_SELL_EXIT_PCT: num.min(0).max(100).default(50),
+  COPY_MAX_OPEN_POSITIONS: num.int().min(0).default(2),
+
   // Dashboard (web UI)
   DASHBOARD_ENABLED: bool.default(true),
   DASHBOARD_HOST: z.string().default("127.0.0.1"),
@@ -91,7 +145,11 @@ const schema = z.object({
 });
 
 export type RawConfig = z.infer<typeof schema>;
-export type Config = RawConfig & { takeProfitLevels: { multiple: number; fraction: number }[] };
+export type Config = RawConfig & {
+  takeProfitLevels: { multiple: number; fraction: number }[];
+  /** Whale wallets to copy (from COPY_WALLETS and COPY_WALLETS_FILE). Empty = copy trading off. */
+  copyWallets: WatchedWallet[];
+};
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): Config {
   // Treat empty strings as "unset" so defaults apply.
@@ -112,5 +170,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     }
     if (!cfg.WALLET_PRIVATE_KEY) throw new Error("MODE=live requires WALLET_PRIVATE_KEY in .env");
   }
-  return { ...cfg, takeProfitLevels: parseTakeProfitLevels(cfg.TAKE_PROFIT_LEVELS) };
+  let walletText = cfg.COPY_WALLETS;
+  if (cfg.COPY_WALLETS_FILE) {
+    if (!existsSync(cfg.COPY_WALLETS_FILE)) throw new Error(`COPY_WALLETS_FILE not found: ${cfg.COPY_WALLETS_FILE}`);
+    walletText += "\n" + readFileSync(cfg.COPY_WALLETS_FILE, "utf8");
+  }
+  const copyWallets = parseWalletList(walletText);
+  return { ...cfg, takeProfitLevels: parseTakeProfitLevels(cfg.TAKE_PROFIT_LEVELS), copyWallets };
 }

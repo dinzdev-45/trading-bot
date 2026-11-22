@@ -6,19 +6,21 @@ import type { Config } from "./config.js";
 import { PaperExecutor } from "./exec/paper.js";
 import { Journal } from "./journal.js";
 import type { Logger } from "./logger.js";
-import type { Socials } from "./types.js";
+import type { CoinInfo, Socials } from "./types.js";
 
 /** Replay a file recorded with RECORD_FILE through the strategy (always paper). */
 export async function replay(cfg: Config, log: Logger, file: string, clock: { now: number } = { now: 0 }): Promise<Bot> {
   // Metadata lines are loaded up-front so socials are known when the create event replays.
   const socials = new Map<string, Socials | null>();
+  const infos = new Map<string, CoinInfo | null>();
   const events: { t: number; m: unknown }[] = [];
   const rl = createInterface({ input: createReadStream(file) });
   for await (const line of rl) {
     if (!line.trim()) continue;
     try {
       const entry = JSON.parse(line);
-      if (entry.meta) socials.set(entry.meta.mint, entry.meta.socials);
+      if (entry.meta && "info" in entry.meta) infos.set(entry.meta.mint, entry.meta.info);
+      else if (entry.meta) socials.set(entry.meta.mint, entry.meta.socials);
       else if (typeof entry.t === "number") events.push(entry);
     } catch {
       /* skip bad line */
@@ -33,6 +35,7 @@ export async function replay(cfg: Config, log: Logger, file: string, clock: { no
     subscribe: () => {},
     unsubscribe: () => {},
     fetchSocials: async (mint) => socials.get(mint) ?? null,
+    fetchCoinInfo: async (mint) => infos.get(mint) ?? null,
   });
 
   let lastTick = events[0]?.t ?? 0;
