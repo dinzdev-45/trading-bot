@@ -7,7 +7,7 @@ import { Bot } from "../src/bot.js";
 import { PaperExecutor } from "../src/exec/paper.js";
 import { Journal } from "../src/journal.js";
 import { silentLogger } from "../src/logger.js";
-import { replay } from "../src/index.js";
+import { replay } from "../src/replay.js";
 import type { Socials } from "../src/types.js";
 import { FakeToken, testConfig } from "./helpers.js";
 
