@@ -1,0 +1,612 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Momentum Bot</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2314b86a'/%3E%3Cpath d='M7 21l6-6 4 4 8-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+:root {
+  color-scheme: dark;
+  --page: #0b0c0e;
+  --surface: #141518;
+  --surface-2: #1b1d21;
+  --border: rgba(255,255,255,0.08);
+  --grid: #26282c;
+  --axis: #3a3c40;
+  --ink: #f0efec;
+  --ink-2: #b9b8b1;
+  --muted: #85847e;
+  --up: #22c55e;
+  --up-ink: #3ddc78;
+  --down: #ef4444;
+  --down-ink: #ff6b6b;
+  --line: #3987e5;
+  --line-fill: rgba(57,135,229,0.16);
+  --warn: #fab219;
+  --accent: #14b86a;
+  --chip: #23252a;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --page: #f4f4f1;
+  --surface: #ffffff;
+  --surface-2: #f7f7f4;
+  --border: rgba(11,11,11,0.09);
+  --grid: #ecebe6;
+  --axis: #c3c2b7;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #7a7973;
+  --up: #0ca30c;
+  --up-ink: #067a06;
+  --down: #d03b3b;
+  --down-ink: #c02f2f;
+  --line: #2a78d6;
+  --line-fill: rgba(42,120,214,0.12);
+  --warn: #b97f00;
+  --chip: #efeee9;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--page);
+  color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.num { font-variant-numeric: tabular-nums; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 20px 24px 40px; }
+
+/* header */
+header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 18px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 17px; letter-spacing: -0.01em; }
+.logo { width: 30px; height: 30px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; }
+.badge { font-size: 11px; font-weight: 700; letter-spacing: .06em; padding: 3px 8px; border-radius: 6px; background: var(--chip); color: var(--ink-2); }
+.badge.paper { background: rgba(57,135,229,.16); color: #6aa8f0; }
+.badge.live { background: rgba(239,68,68,.18); color: var(--down-ink); }
+.badge.demo { background: rgba(250,178,25,.16); color: var(--warn); }
+.pill { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-2); padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--surface); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.dot.ok { background: var(--up); box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
+.dot.warn { background: var(--warn); }
+.dot.bad { background: var(--down); }
+.spacer { flex: 1; }
+.meta { color: var(--muted); font-size: 13px; }
+button.icon { background: var(--surface); border: 1px solid var(--border); color: var(--ink-2); border-radius: 8px; height: 32px; padding: 0 10px; cursor: pointer; font: inherit; font-size: 13px; }
+button.icon:hover { color: var(--ink); }
+
+.banner { display: none; margin-bottom: 14px; padding: 10px 14px; border-radius: 10px; background: rgba(239,68,68,.12); color: var(--down-ink); border: 1px solid rgba(239,68,68,.25); font-size: 13px; }
+.banner.show { display: block; }
+
+/* cards */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; min-width: 0; }
+.card h2 { font-size: 13px; font-weight: 600; color: var(--ink-2); margin: 0; letter-spacing: .01em; }
+.card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; min-height: 28px; }
+.card-head .spacer { flex: 1; }
+.sub { color: var(--muted); font-size: 12px; }
+
+.kpis { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 12px; margin-bottom: 12px; }
+.kpi .label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.kpi .value { font-size: 24px; font-weight: 650; letter-spacing: -0.02em; margin-top: 4px; white-space: nowrap; }
+.kpi .value small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 3px; }
+.kpi .foot { font-size: 12px; color: var(--ink-2); margin-top: 4px; }
+.up { color: var(--up-ink); }
+.down { color: var(--down-ink); }
+.flat { color: var(--ink-2); }
+.meter { height: 4px; border-radius: 4px; background: var(--grid); margin-top: 8px; overflow: hidden; }
+.meter > i { display: block; height: 100%; border-radius: 4px; background: var(--down); width: 0; transition: width .4s; }
+
+.row { display: grid; gap: 12px; margin-bottom: 12px; }
+.row.two { grid-template-columns: minmax(0,2fr) minmax(0,1fr); }
+
+/* segmented */
+.seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 2px; }
+.seg button { background: none; border: 0; color: var(--muted); font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+.seg button.on { background: var(--chip); color: var(--ink); font-weight: 600; }
+
+/* charts */
+.chart { position: relative; height: 260px; }
+.chart svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.chart text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tip { position: absolute; pointer-events: none; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; font-size: 12px; box-shadow: 0 6px 20px rgba(0,0,0,.25); white-space: nowrap; display: none; z-index: 2; }
+.tip b { font-weight: 650; }
+.tip .t { color: var(--muted); font-size: 11px; }
+.empty[hidden] { display: none; }
+.empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; text-align: center; padding: 20px; }
+
+/* tables */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 0 10px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+td { padding: 9px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tr:last-child td { border-bottom: 0; }
+th.r, td.r { text-align: right; }
+tbody tr:hover td { background: var(--surface-2); }
+.tok { display: flex; flex-direction: column; }
+.tok b { font-weight: 600; }
+.tok a, .tok span { color: var(--muted); font-size: 11px; text-decoration: none; }
+.tok a:hover { color: var(--ink-2); text-decoration: underline; }
+.tag { display: inline-block; font-size: 11px; font-weight: 650; padding: 2px 7px; border-radius: 5px; letter-spacing: .03em; }
+.tag.buy { background: rgba(57,135,229,.16); color: #6aa8f0; }
+.tag.sell { background: rgba(250,178,25,.15); color: var(--warn); }
+.tag.win { background: rgba(34,197,94,.15); color: var(--up-ink); }
+.tag.loss { background: rgba(239,68,68,.15); color: var(--down-ink); }
+.tag.fail { background: var(--chip); color: var(--muted); }
+.reason { color: var(--ink-2); max-width: 340px; overflow: hidden; text-overflow: ellipsis; display: inline-block; vertical-align: bottom; }
+.prog { display: flex; align-items: center; gap: 8px; min-width: 120px; }
+.prog .bar { flex: 1; height: 6px; border-radius: 6px; background: var(--grid); position: relative; overflow: hidden; }
+.prog .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 6px; background: var(--line); }
+.none { color: var(--muted); text-align: center; padding: 26px 10px; font-size: 13px; }
+.scroll { max-height: 420px; overflow-y: auto; }
+
+/* log */
+.log { font-size: 12px; line-height: 1.5; max-height: 420px; overflow-y: auto; }
+.log div { padding: 3px 0; border-bottom: 1px dashed var(--border); display: flex; gap: 8px; }
+.log time { color: var(--muted); flex: none; }
+.log .lv { flex: none; font-weight: 700; font-size: 10px; padding-top: 2px; width: 34px; }
+.log .lv.info { color: var(--muted); }
+.log .lv.warn { color: var(--warn); }
+.log .lv.error { color: var(--down-ink); }
+.log .lv.debug { color: var(--axis); }
+.log .m { color: var(--ink-2); word-break: break-word; }
+.log .m.hl { color: var(--ink); font-weight: 550; }
+
+.settings { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { background: var(--chip); color: var(--ink-2); border-radius: 7px; padding: 4px 9px; font-size: 12px; }
+.chip b { color: var(--ink); font-weight: 600; }
+
+@media (max-width: 1100px) { .kpis { grid-template-columns: repeat(3, minmax(0,1fr)); } .row.two { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .wrap { padding: 14px 16px 30px; } .kpis { grid-template-columns: repeat(2, minmax(0,1fr)); } .kpi .value { font-size: 20px; } .chart { height: 220px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo"><svg width="18" height="18" viewBox="0 0 32 32"><path d="M5 22l7-7 5 5 10-11" stroke="white" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      Momentum Bot
+    </div>
+    <span id="mode" class="badge">…</span>
+    <span class="pill"><span id="feedDot" class="dot"></span><span id="feedText">Menghubungkan…</span></span>
+    <div class="spacer"></div>
+    <span class="meta" id="uptime"></span>
+    <button class="icon" id="themeBtn" title="Ganti tema"></button>
+  </header>
+
+  <div class="banner" id="banner">Koneksi ke bot terputus. Pastikan <span class="mono">npm start</span> masih berjalan, dashboard akan tersambung lagi otomatis.</div>
+
+  <section class="kpis">
+    <div class="card kpi"><div class="label" id="eqLabel">Ekuitas</div><div class="value num" id="kEquity">–</div><div class="foot num" id="kEquityFoot">&nbsp;</div></div>
+    <div class="card kpi"><div class="label">PnL terealisasi</div><div class="value num" id="kRealized">–</div><div class="foot num" id="kRealizedFoot">&nbsp;</div></div>
+    <div class="card kpi"><div class="label">PnL hari ini (UTC)</div><div class="value num" id="kDaily">–</div><div class="meter" title="Batas rugi harian"><i id="kDailyMeter"></i></div><div class="foot num" id="kDailyFoot">&nbsp;</div></div>
+    <div class="card kpi"><div class="label">Win rate</div><div class="value num" id="kWin">–</div><div class="foot num" id="kWinFoot">&nbsp;</div></div>
+    <div class="card kpi"><div class="label">Posisi terbuka</div><div class="value num" id="kOpen">–</div><div class="foot num" id="kOpenFoot">&nbsp;</div></div>
+    <div class="card kpi"><div class="label">Event feed</div><div class="value num" id="kFeed">–</div><div class="foot num" id="kFeedFoot">&nbsp;</div></div>
+  </section>
+
+  <section class="row two">
+    <div class="card">
+      <div class="card-head">
+        <h2 id="eqTitle">Ekuitas (saldo + nilai posisi terbuka)</h2>
+        <div class="spacer"></div>
+        <div class="seg" id="range">
+          <button data-m="15">15m</button><button data-m="60" class="on">1j</button><button data-m="360">6j</button><button data-m="0">Semua</button>
+        </div>
+      </div>
+      <div class="chart" id="eqChart"><svg></svg><div class="tip"></div><div class="empty" hidden>Menunggu data…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>PnL per trade</h2><div class="spacer"></div><span class="sub" id="pnlSub"></span></div>
+      <div class="chart" id="pnlChart"><svg></svg><div class="tip"></div><div class="empty" hidden>Belum ada trade yang selesai.<br>Bot sedang menunggu sinyal.</div></div>
+    </div>
+  </section>
+
+  <section class="card" style="margin-bottom:12px">
+    <div class="card-head"><h2>Posisi terbuka</h2><div class="spacer"></div><span class="sub" id="openSub"></span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Token</th><th class="r">Modal</th><th class="r">Nilai sekarang</th><th class="r">PnL</th><th>Progres curve</th><th class="r">TP kena</th><th class="r">Durasi</th></tr></thead>
+        <tbody id="openBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="row two">
+    <div class="card">
+      <div class="card-head">
+        <h2>Riwayat trade</h2><div class="spacer"></div>
+        <div class="seg" id="histTab"><button data-v="closed" class="on">Selesai</button><button data-v="all">Semua aksi</button></div>
+      </div>
+      <div class="table-wrap scroll">
+        <table>
+          <thead id="histHead"></thead>
+          <tbody id="histBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Aktivitas</h2><div class="spacer"></div><div class="seg" id="logTab"><button data-v="trade" class="on">Trade</button><button data-v="all">Semua</button></div></div>
+      <div class="log mono" id="log"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><h2>Setelan aktif</h2><div class="spacer"></div><span class="sub">ubah di file .env lalu jalankan ulang bot</span></div>
+    <div class="settings" id="settings"></div>
+  </section>
+</div>
+
+<script>
+"use strict";
+// ------------------------------------------------------------------ helpers
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const isMint = (m) => typeof m === "string" && /^[1-9A-HJ-NP-Za-km-z]{32,48}$/.test(m);
+const sol = (v, d = 4) => (Number.isFinite(v) ? v.toFixed(d) : "–");
+const signed = (v, d = 4) => (Number.isFinite(v) ? (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(d) : "–");
+const cls = (v) => (v > 1e-9 ? "up" : v < -1e-9 ? "down" : "flat");
+const arrow = (v) => (v > 1e-9 ? "▲ " : v < -1e-9 ? "▼ " : "");
+const pad = (n) => String(n).padStart(2, "0");
+const hhmm = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const hhmmss = (t) => { const d = new Date(t); return `${hhmm(t)}:${pad(d.getSeconds())}`; };
+const dateTime = (t) => {
+  const d = new Date(t), now = new Date();
+  const same = d.toDateString() === now.toDateString();
+  return same ? hhmmss(t) : `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${hhmm(t)}`;
+};
+const dur = (sec) => {
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 60) return `${sec}d`;
+  if (sec < 3600) return `${Math.floor(sec / 60)}m ${pad(sec % 60)}d`;
+  return `${Math.floor(sec / 3600)}j ${pad(Math.floor((sec % 3600) / 60))}m`;
+};
+const shortMint = (m) => (m ? `${m.slice(0, 4)}…${m.slice(-4)}` : "");
+const tokenCell = (symbol, mint) => {
+  const name = `<b>${esc(symbol || shortMint(mint))}</b>`;
+  if (!isMint(mint)) return `<div class="tok">${name}<span class="mono">${esc(shortMint(mint))}</span></div>`;
+  return `<div class="tok">${name}<a class="mono" href="https://pump.fun/coin/${mint}" target="_blank" rel="noopener noreferrer">${shortMint(mint)} ↗</a></div>`;
+};
+const REASONS = [
+  [/take-profit/i, "take-profit"], [/trailing/i, "trailing stop"], [/stop-loss/i, "stop-loss"],
+  [/momentum/i, "momentum mati"], [/max hold/i, "batas waktu"], [/gradua|migrat/i, "jelang lulus"],
+];
+
+// ------------------------------------------------------------------ state
+const S = { state: null, equity: [], trades: [], logs: [], range: 60, hist: "closed", logView: "trade", connected: false };
+
+// theme
+(function initTheme() {
+  let t = null;
+  try { t = localStorage.getItem("theme"); } catch {}
+  if (!t) t = matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  const apply = (v) => { document.documentElement.dataset.theme = v; $("themeBtn").textContent = v === "light" ? "☾ Gelap" : "☀ Terang"; };
+  apply(t);
+  $("themeBtn").onclick = () => {
+    const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    apply(next);
+    try { localStorage.setItem("theme", next); } catch {}
+    drawCharts();
+  };
+})();
+
+function segmented(el, key, attr, after) {
+  el.addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    el.querySelectorAll("button").forEach((x) => x.classList.toggle("on", x === b));
+    S[key] = attr === "m" ? Number(b.dataset.m) : b.dataset.v;
+    after();
+  });
+}
+segmented($("range"), "range", "m", () => drawEquity());
+segmented($("histTab"), "hist", "v", () => renderHistory());
+segmented($("logTab"), "logView", "v", () => renderLogs());
+
+// ------------------------------------------------------------------ KPIs
+function renderState() {
+  const st = S.state; if (!st) return;
+  const s = st.summary, set = st.settings, feed = st.feed;
+  const live = s.mode === "live";
+  const demo = set.demo === true;
+  const mode = $("mode");
+  mode.textContent = demo ? "DEMO" : live ? "LIVE" : "PAPER";
+  mode.className = "badge " + (demo ? "demo" : live ? "live" : "paper");
+  document.title = `${signed(s.realizedPnlSol, 3)} SOL · Momentum Bot`;
+
+  const openVal = s.openPositions.reduce((a, p) => a + p.valueSol, 0);
+  const start = Number(set.startingBalanceSol) || 0;
+  if (live) {
+    $("eqLabel").textContent = "PnL total (termasuk posisi terbuka)";
+    const openPnl = s.openPositions.reduce((a, p) => a + p.valueSol + p.solReceived - p.solSpent, 0);
+    const tot = s.realizedPnlSol + openPnl;
+    setVal("kEquity", signed(tot), "SOL", cls(tot));
+    $("kEquityFoot").textContent = `posisi terbuka ${signed(openPnl)} SOL`;
+  } else {
+    $("eqLabel").textContent = "Ekuitas (simulasi)";
+    const eq = s.balanceSol + openVal;
+    setVal("kEquity", sol(eq), "SOL");
+    const ch = eq - start, pct = start ? (ch / start) * 100 : 0;
+    $("kEquityFoot").innerHTML = `<span class="${cls(ch)}">${arrow(ch)}${signed(ch)} (${signed(pct, 1)}%)</span>`;
+  }
+  setVal("kRealized", signed(s.realizedPnlSol), "SOL", cls(s.realizedPnlSol));
+  $("kRealizedFoot").textContent = `${s.closedTrades} trade selesai`;
+
+  setVal("kDaily", signed(s.dailyPnlSol), "SOL", cls(s.dailyPnlSol));
+  const lim = Number(set.maxDailyLossSol) || 1;
+  const used = Math.min(100, Math.max(0, (-s.dailyPnlSol / lim) * 100));
+  $("kDailyMeter").style.width = used + "%";
+  $("kDailyFoot").textContent = used >= 100 ? "batas rugi tercapai, entry dijeda" : `${used.toFixed(0)}% dari batas rugi ${sol(lim, 2)} SOL`;
+
+  setVal("kWin", s.closedTrades ? s.winRatePct.toFixed(0) + "%" : "–", "");
+  $("kWinFoot").innerHTML = `<span class="up">${s.wins} menang</span> · <span class="down">${s.losses} kalah</span>`;
+
+  setVal("kOpen", String(s.openPositions.length), `/ ${set.maxOpenPositions}`);
+  $("kOpenFoot").textContent = `nilai ${sol(openVal)} SOL`;
+
+  setVal("kFeed", String(feed.eventsPerMin), "/mnt");
+  $("kFeedFoot").textContent = `${feed.newTokensPerMin} token baru/mnt · pantau ${s.trackedTokens}`;
+  const dot = $("feedDot"), ft = $("feedText");
+  const stale = feed.lastEventAgoSec == null || feed.lastEventAgoSec > 60;
+  if (!S.connected) { dot.className = "dot bad"; ft.textContent = "Bot tidak terhubung"; }
+  else if (!feed.connected) { dot.className = "dot bad"; ft.textContent = "Feed terputus, menyambung ulang…"; }
+  else if (stale) { dot.className = "dot warn"; ft.textContent = feed.lastEventAgoSec == null ? "Feed tersambung, menunggu data…" : `Tidak ada data ${dur(feed.lastEventAgoSec)}`; }
+  else { dot.className = "dot ok"; ft.textContent = `Feed live · data ${feed.lastEventAgoSec}d lalu`; }
+
+  $("uptime").textContent = `berjalan ${dur((st.now - st.startedAt) / 1000)}`;
+  renderOpen();
+  renderSettings();
+}
+function setVal(id, text, unit, c) {
+  const el = $(id);
+  el.className = "value num " + (c || "");
+  el.innerHTML = `${esc(text)}${unit ? `<small>${esc(unit)}</small>` : ""}`;
+}
+
+function renderOpen() {
+  const s = S.state.summary, now = S.state.now;
+  $("openSub").textContent = s.openPositions.length ? "nilai dihitung dari harga curve saat ini" : "";
+  if (!s.openPositions.length) {
+    $("openBody").innerHTML = `<tr><td colspan="7" class="none">Tidak ada posisi terbuka. Bot sedang mencari token dengan momentum.</td></tr>`;
+    return;
+  }
+  $("openBody").innerHTML = s.openPositions.map((p) => {
+    const pnlSol = p.valueSol + p.solReceived - p.solSpent;
+    const prog = Math.max(0, Math.min(100, p.curveProgressPct));
+    return `<tr>
+      <td>${tokenCell(p.symbol, p.mint)}</td>
+      <td class="r num">${sol(p.solSpent)}</td>
+      <td class="r num">${sol(p.valueSol)}${p.solReceived > 0 ? `<div class="sub">+${sol(p.solReceived)} sudah dijual</div>` : ""}</td>
+      <td class="r num ${cls(p.pnlPct)}"><b>${arrow(p.pnlPct)}${signed(p.pnlPct, 1)}%</b><div class="sub ${cls(pnlSol)}">${signed(pnlSol)} SOL</div></td>
+      <td><div class="prog"><div class="bar"><i style="width:${prog.toFixed(1)}%"></i></div><span class="num sub">${prog.toFixed(0)}%</span></div></td>
+      <td class="r num">${p.tpHit}</td>
+      <td class="r num">${dur((now - p.openedAt) / 1000)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function renderSettings() {
+  const set = S.state.settings;
+  const items = [
+    ["Ukuran beli", `${set.buyAmountSol} SOL`], ["Maks posisi", set.maxOpenPositions], ["Zona curve", set.curveWindow],
+    ["Take-profit", set.takeProfit || "–"], ["Stop-loss", `−${set.stopLossPct}%`], ["Trailing", `${set.trailingStopPct}%`],
+    ["Batas rugi harian", `${set.maxDailyLossSol} SOL`], ["Jito", set.useJito ? "aktif" : "mati"],
+  ];
+  if (set.mode !== "live") items.unshift(["Saldo awal", `${set.startingBalanceSol} SOL`]);
+  const html = items.map(([k, v]) => `<span class="chip">${esc(k)} <b>${esc(v)}</b></span>`).join("");
+  if ($("settings").innerHTML !== html) $("settings").innerHTML = html;
+}
+
+// ------------------------------------------------------------------ history
+function closes() { return S.trades.filter((t) => t.type === "close"); }
+
+function shortReason(reasons) {
+  const r = (reasons || []).at(-1) || "";
+  for (const [re, label] of REASONS) if (re.test(r)) return label;
+  return r;
+}
+
+function renderHistory() {
+  const head = $("histHead"), body = $("histBody");
+  if (S.hist === "closed") {
+    head.innerHTML = `<tr><th>Waktu</th><th>Token</th><th>Hasil</th><th class="r">Modal</th><th class="r">PnL</th><th class="r">Durasi</th><th>Alasan keluar</th></tr>`;
+    const rows = closes().slice(-200).reverse();
+    body.innerHTML = rows.length ? rows.map((t) => `<tr>
+      <td class="num">${dateTime(t.t)}</td>
+      <td>${tokenCell(t.symbol, t.mint)}</td>
+      <td><span class="tag ${t.pnlSol > 0 ? "win" : "loss"}">${t.pnlSol > 0 ? "MENANG" : "KALAH"}</span></td>
+      <td class="r num">${sol(t.solSpent)}</td>
+      <td class="r num ${cls(t.pnlSol)}"><b>${signed(t.pnlSol)}</b><div class="sub">${signed(t.pnlPct, 1)}%</div></td>
+      <td class="r num">${dur(t.holdSec)}</td>
+      <td><span class="reason" title="${esc((t.reasons || []).join(" → "))}">${esc(shortReason(t.reasons))}</span></td>
+    </tr>`).join("") : `<tr><td colspan="7" class="none">Belum ada trade yang selesai.</td></tr>`;
+  } else {
+    head.innerHTML = `<tr><th>Waktu</th><th>Aksi</th><th>Token</th><th class="r">SOL</th><th>Detail</th></tr>`;
+    const rows = S.trades.slice(-300).reverse();
+    body.innerHTML = rows.length ? rows.map((t) => {
+      let tag, amt = "", detail = "";
+      if (t.type === "buy") { tag = `<span class="tag buy">BELI</span>`; amt = `−${sol(t.sol)}`; detail = t.signal ? `curve ${t.signal.progressPct}% · ${t.signal.uniqueBuyers} pembeli · vol ${t.signal.buyVolSol} SOL` : ""; }
+      else if (t.type === "sell") { tag = `<span class="tag sell">JUAL</span>`; amt = `+${sol(t.sol)}`; detail = t.reason || ""; }
+      else if (t.type === "close") { tag = `<span class="tag ${t.pnlSol > 0 ? "win" : "loss"}">TUTUP</span>`; amt = `<span class="${cls(t.pnlSol)}">${signed(t.pnlSol)}</span>`; detail = `${signed(t.pnlPct, 1)}% setelah ${dur(t.holdSec)}`; }
+      else { tag = `<span class="tag fail">GAGAL</span>`; detail = t.error || ""; }
+      return `<tr><td class="num">${dateTime(t.t)}</td><td>${tag}</td><td>${tokenCell(t.symbol, t.mint)}</td><td class="r num">${amt}</td><td><span class="reason" title="${esc(detail)}">${esc(detail)}</span></td></tr>`;
+    }).join("") : `<tr><td colspan="5" class="none">Belum ada aksi.</td></tr>`;
+  }
+}
+
+// ------------------------------------------------------------------ logs
+const TRADE_LOG = /^(BUY signal|BOUGHT|SELL|SOLD|CLOSED|buy .* failed|sell .* failed|daily loss|LIVE|DEMO|dashboard|feed )/;
+function renderLogs() {
+  const el = $("log");
+  const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 30;
+  let rows = S.logs;
+  if (S.logView === "trade") rows = rows.filter((l) => l.level !== "debug" && (l.level !== "info" || TRADE_LOG.test(l.msg)));
+  rows = rows.slice(-150);
+  el.innerHTML = rows.length ? rows.map((l) => {
+    const hl = /^(BOUGHT|CLOSED)/.test(l.msg);
+    return `<div><time>${hhmmss(l.t)}</time><span class="lv ${esc(l.level)}">${esc(l.level.toUpperCase())}</span><span class="m${hl ? " hl" : ""}">${esc(l.msg)}</span></div>`;
+  }).join("") : `<div class="none" style="border:0;display:block">Belum ada aktivitas trade.</div>`;
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+
+// ------------------------------------------------------------------ charts
+const NS = "http://www.w3.org/2000/svg";
+const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function niceTicks(min, max, count = 4) {
+  const span = max - min || Math.abs(max) || 1;
+  const step0 = span / count, mag = 10 ** Math.floor(Math.log10(step0));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => span / s <= count) || mag * 10;
+  const lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step;
+  const out = []; for (let v = lo; v <= hi + step / 2; v += step) out.push(+v.toFixed(10));
+  return out;
+}
+function decimalsFor(ticks) { const s = Math.abs(ticks[1] - ticks[0]) || 1; return s >= 1 ? 0 : s >= 0.1 ? 1 : s >= 0.01 ? 2 : s >= 0.001 ? 3 : 4; }
+function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; }
+
+function drawEquity() {
+  const box = $("eqChart"), svg = box.querySelector("svg"), tip = box.querySelector(".tip"), empty = box.querySelector(".empty");
+  svg.innerHTML = "";
+  const live = S.state && S.state.summary.mode === "live";
+  $("eqTitle").textContent = live ? "PnL terealisasi" : "Ekuitas (saldo + nilai posisi terbuka)";
+  const key = live ? "realized" : "equity";
+  let pts = S.equity;
+  if (S.range) { const from = Date.now() - S.range * 60_000; pts = pts.filter((p) => p.t >= from); }
+  if (pts.length < 2) { empty.hidden = false; return; }
+  empty.hidden = true;
+  const W = box.clientWidth, H = box.clientHeight, m = { l: 52, r: 10, t: 10, b: 24 };
+  if (W < 120) return;
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const t0 = pts[0].t, t1 = pts.at(-1).t;
+  const base = live ? 0 : Number(S.state?.settings.startingBalanceSol) || pts[0][key];
+  let lo = Math.min(base, ...pts.map((p) => p[key])), hi = Math.max(base, ...pts.map((p) => p[key]));
+  if (hi - lo < 1e-6) { lo -= 0.05; hi += 0.05; }
+  const ticks = niceTicks(lo, hi, 4); lo = ticks[0]; hi = ticks.at(-1);
+  const dp = decimalsFor(ticks);
+  const x = (t) => m.l + ((t - t0) / (t1 - t0 || 1)) * iw;
+  const y = (v) => m.t + ih - ((v - lo) / (hi - lo || 1)) * ih;
+  const g = el("g", {}, svg);
+  for (const v of ticks) {
+    el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: css("--grid"), "stroke-width": 1 }, g);
+    const tx = el("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }, g); tx.textContent = v.toFixed(dp);
+  }
+  // x ticks
+  const nx = Math.max(2, Math.min(6, Math.floor(iw / 110)));
+  for (let i = 0; i <= nx; i++) {
+    const t = t0 + ((t1 - t0) * i) / nx;
+    const tx = el("text", { x: x(t), y: H - 6, "text-anchor": i === 0 ? "start" : i === nx ? "end" : "middle" }, g);
+    tx.textContent = t1 - t0 < 15 * 60_000 ? hhmmss(t) : hhmm(t);
+  }
+  // baseline (starting balance / zero)
+  el("line", { x1: m.l, x2: W - m.r, y1: y(base), y2: y(base), stroke: css("--axis"), "stroke-width": 1, "stroke-dasharray": "4 4" }, g);
+  const bl = el("text", { x: W - m.r, y: y(base) - 5, "text-anchor": "end" }, g); bl.textContent = live ? "0" : `saldo awal ${sol(base, 2)}`;
+  // area + line (downsample to ~2 pts/px)
+  const step = Math.max(1, Math.floor(pts.length / (iw * 2)));
+  const ds = pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
+  const d = ds.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p[key]).toFixed(1)}`).join("");
+  el("path", { d: `${d}L${x(t1).toFixed(1)},${(m.t + ih).toFixed(1)}L${m.l},${(m.t + ih).toFixed(1)}Z`, fill: css("--line-fill") }, svg);
+  el("path", { d, fill: "none", stroke: css("--line"), "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+  const last = pts.at(-1);
+  el("circle", { cx: x(last.t), cy: y(last[key]), r: 4, fill: css("--line"), stroke: css("--surface"), "stroke-width": 2 }, svg);
+  // crosshair
+  const cross = el("line", { y1: m.t, y2: m.t + ih, stroke: css("--axis"), "stroke-width": 1, visibility: "hidden" }, svg);
+  const dot = el("circle", { r: 4, fill: css("--line"), stroke: css("--surface"), "stroke-width": 2, visibility: "hidden" }, svg);
+  const hit = el("rect", { x: m.l, y: m.t, width: iw, height: ih, fill: "transparent" }, svg);
+  hit.addEventListener("mousemove", (e) => {
+    const r = svg.getBoundingClientRect(), px = e.clientX - r.left;
+    const t = t0 + ((px - m.l) / iw) * (t1 - t0);
+    let best = pts[0]; for (const p of pts) if (Math.abs(p.t - t) < Math.abs(best.t - t)) best = p;
+    const cx = x(best.t), cy = y(best[key]);
+    cross.setAttribute("x1", cx); cross.setAttribute("x2", cx); cross.setAttribute("visibility", "visible");
+    dot.setAttribute("cx", cx); dot.setAttribute("cy", cy); dot.setAttribute("visibility", "visible");
+    const ch = live ? best.realized : best.equity - base;
+    tip.innerHTML = `<div class="t">${hhmmss(best.t)}</div><b class="num">${sol(best[key])} SOL</b><div class="num ${cls(ch)}">${signed(ch)} SOL</div>${live ? "" : `<div class="t num">saldo ${sol(best.balance)} · realized ${signed(best.realized)}</div>`}`;
+    tip.style.display = "block";
+    const tw = tip.offsetWidth;
+    tip.style.left = Math.min(Math.max(cx + 12, 0), W - tw - 4) - (cx + 12 + tw > W ? tw + 24 : 0) + "px";
+    tip.style.top = Math.max(0, cy - 60) + "px";
+  });
+  hit.addEventListener("mouseleave", () => { tip.style.display = "none"; cross.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden"); });
+}
+
+function drawPnl() {
+  const box = $("pnlChart"), svg = box.querySelector("svg"), tip = box.querySelector(".tip"), empty = box.querySelector(".empty");
+  svg.innerHTML = "";
+  const rows = closes().slice(-40);
+  const total = rows.reduce((a, t) => a + t.pnlSol, 0);
+  $("pnlSub").innerHTML = rows.length ? `${rows.length} terakhir · <span class="${cls(total)}">${signed(total)} SOL</span>` : "";
+  if (!rows.length) { empty.hidden = false; return; }
+  empty.hidden = true;
+  const W = box.clientWidth, H = box.clientHeight, m = { l: 44, r: 6, t: 10, b: 10 };
+  if (W < 120) return;
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  let lo = Math.min(0, ...rows.map((r) => r.pnlSol)), hi = Math.max(0, ...rows.map((r) => r.pnlSol));
+  if (hi - lo < 1e-6) { hi = 0.01; lo = -0.01; }
+  const ticks = niceTicks(lo, hi, 4); lo = ticks[0]; hi = ticks.at(-1);
+  const dp = decimalsFor(ticks);
+  const y = (v) => m.t + ih - ((v - lo) / (hi - lo)) * ih;
+  for (const v of ticks) {
+    el("line", { x1: m.l, x2: W - m.r, y1: y(v), y2: y(v), stroke: css("--grid"), "stroke-width": 1 }, svg);
+    const tx = el("text", { x: m.l - 6, y: y(v) + 4, "text-anchor": "end" }, svg); tx.textContent = v.toFixed(dp);
+  }
+  const slot = iw / Math.max(rows.length, 12), bw = Math.max(3, Math.min(22, slot - 2));
+  const up = css("--up"), down = css("--down");
+  rows.forEach((t, i) => {
+    const cx = m.l + slot * i + slot / 2, y0 = y(0), y1 = y(t.pnlSol);
+    const h = Math.max(1.5, Math.abs(y1 - y0)), top = t.pnlSol >= 0 ? y0 - h : y0;
+    const r = Math.min(4, bw / 2, h);
+    // rounded only at the data end, square at the baseline
+    const xL = cx - bw / 2, xR = cx + bw / 2;
+    const d = t.pnlSol >= 0
+      ? `M${xL},${y0}V${top + r}Q${xL},${top} ${xL + r},${top}H${xR - r}Q${xR},${top} ${xR},${top + r}V${y0}Z`
+      : `M${xL},${y0}V${y0 + h - r}Q${xL},${y0 + h} ${xL + r},${y0 + h}H${xR - r}Q${xR},${y0 + h} ${xR},${y0 + h - r}V${y0}Z`;
+    el("path", { d, fill: t.pnlSol >= 0 ? up : down }, svg);
+    const hit = el("rect", { x: cx - slot / 2, y: m.t, width: slot, height: ih, fill: "transparent" }, svg);
+    hit.addEventListener("mousemove", () => {
+      tip.innerHTML = `<div class="t">${dateTime(t.t)}</div><b>${esc(t.symbol || shortMint(t.mint))}</b> <span class="num ${cls(t.pnlSol)}">${arrow(t.pnlSol)}${signed(t.pnlSol)} SOL (${signed(t.pnlPct, 1)}%)</span><div class="t">${esc(shortReason(t.reasons))} · ${dur(t.holdSec)}</div>`;
+      tip.style.display = "block";
+      const tw = tip.offsetWidth;
+      tip.style.left = Math.max(0, Math.min(cx - tw / 2, W - tw)) + "px";
+      tip.style.top = Math.max(0, Math.min(y1, y0) - 70) + "px";
+    });
+    hit.addEventListener("mouseleave", () => (tip.style.display = "none"));
+  });
+  el("line", { x1: m.l, x2: W - m.r, y1: y(0), y2: y(0), stroke: css("--axis"), "stroke-width": 1 }, svg);
+}
+
+function drawCharts() { drawEquity(); drawPnl(); }
+new ResizeObserver(() => drawCharts()).observe($("eqChart"));
+
+// ------------------------------------------------------------------ data
+let es, retry;
+async function load() {
+  try {
+    const r = await fetch("/api/snapshot", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    const snap = await r.json();
+    S.state = snap.state; S.equity = snap.equity; S.trades = snap.trades; S.logs = snap.logs;
+    S.connected = true; $("banner").classList.remove("show");
+    renderState(); renderHistory(); renderLogs(); drawCharts();
+    stream();
+  } catch {
+    disconnected();
+  }
+}
+function disconnected() {
+  S.connected = false; $("banner").classList.add("show");
+  if (S.state) renderState();
+  clearTimeout(retry); retry = setTimeout(load, 3000);
+}
+function stream() {
+  es && es.close();
+  es = new EventSource("/api/stream");
+  es.addEventListener("state", (e) => { S.state = JSON.parse(e.data); renderState(); });
+  es.addEventListener("equity", (e) => { S.equity.push(JSON.parse(e.data)); if (S.equity.length > 20000) S.equity.shift(); drawEquity(); });
+  es.addEventListener("trade", (e) => { S.trades.push(JSON.parse(e.data)); renderHistory(); drawPnl(); });
+  es.addEventListener("log", (e) => { S.logs.push(JSON.parse(e.data)); if (S.logs.length > 400) S.logs.splice(0, 100); renderLogs(); });
+  es.onerror = () => { es.close(); disconnected(); };
+}
+setInterval(() => { if (S.range) drawEquity(); }, 15_000);
+load();
+</script>
+</body>
+</html>

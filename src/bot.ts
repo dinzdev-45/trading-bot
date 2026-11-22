@@ -29,7 +29,17 @@ export interface BotSummary {
   wins: number;
   losses: number;
   winRatePct: number;
-  openPositions: { mint: string; symbol: string; pnlPct: number; valueSol: number }[];
+  openPositions: {
+    mint: string;
+    symbol: string;
+    pnlPct: number;
+    valueSol: number;
+    solSpent: number;
+    solReceived: number;
+    openedAt: number;
+    curveProgressPct: number;
+    tpHit: number;
+  }[];
   trackedTokens: number;
 }
 
@@ -51,6 +61,10 @@ export class Bot {
   private dayKey = "";
   wins = 0;
   losses = 0;
+  /** Lifetime feed counters (for the dashboard's feed-health panel). */
+  totalEvents = 0;
+  totalNewTokens = 0;
+  lastEventAt = 0;
   private lastSummaryAt = 0;
   private eventsSinceSummary = 0;
   private newTokensSinceSummary = 0;
@@ -79,11 +93,14 @@ export class Bot {
     const ev = parseFeedMessage(raw);
     if (!ev) return;
     this.eventsSinceSummary++;
+    this.totalEvents++;
+    this.lastEventAt = now;
     this.rollDay(now);
 
     if (ev.txType === "create") {
       if (this.tracker.tokens.has(ev.mint)) return;
       this.newTokensSinceSummary++;
+      this.totalNewTokens++;
       const st = this.tracker.onCreate(ev, now);
       this.d.subscribe([ev.mint]);
       this.evictIfNeeded();
@@ -145,7 +162,17 @@ export class Bot {
         const st = this.tracker.tokens.get(p.mint);
         const value = st ? quoteSell({ vSol: st.vSol, vTokens: st.vTokens }, p.tokensHeld, this.curve.feeBps).sol : 0;
         const pnl = p.solReceived + value - p.solSpent;
-        return { mint: p.mint, symbol: p.symbol, pnlPct: (pnl / p.solSpent) * 100, valueSol: value };
+        return {
+          mint: p.mint,
+          symbol: p.symbol,
+          pnlPct: (pnl / p.solSpent) * 100,
+          valueSol: value,
+          solSpent: p.solSpent,
+          solReceived: p.solReceived,
+          openedAt: p.openedAt,
+          curveProgressPct: st ? curveProgress(st.vTokens, this.curve) * 100 : 0,
+          tpHit: p.nextTpIndex,
+        };
       });
     const closed = this.wins + this.losses;
     return {

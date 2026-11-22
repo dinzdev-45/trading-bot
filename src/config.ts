@@ -83,6 +83,11 @@ const schema = z.object({
   MAX_DAILY_LOSS_SOL: num.positive().default(1),
   STARTING_BALANCE_SOL: num.positive().default(5),
   SUMMARY_INTERVAL_SEC: num.positive().default(60),
+
+  // Dashboard (web UI)
+  DASHBOARD_ENABLED: bool.default(true),
+  DASHBOARD_HOST: z.string().default("127.0.0.1"),
+  DASHBOARD_PORT: num.int().min(0).max(65535).default(3000),
 });
 
 export type RawConfig = z.infer<typeof schema>;
