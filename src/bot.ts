@@ -52,6 +52,8 @@ export class Bot {
   wins = 0;
   losses = 0;
   private lastSummaryAt = 0;
+  private eventsSinceSummary = 0;
+  private newTokensSinceSummary = 0;
 
   constructor(private readonly d: BotDeps) {
     const { cfg } = d;
@@ -76,10 +78,12 @@ export class Bot {
   handle(raw: unknown, now: number): void {
     const ev = parseFeedMessage(raw);
     if (!ev) return;
+    this.eventsSinceSummary++;
     this.rollDay(now);
 
     if (ev.txType === "create") {
       if (this.tracker.tokens.has(ev.mint)) return;
+      this.newTokensSinceSummary++;
       const st = this.tracker.onCreate(ev, now);
       this.d.subscribe([ev.mint]);
       this.evictIfNeeded();
@@ -119,12 +123,18 @@ export class Bot {
       if (st.migrated || now - st.createdAt > maxAgeMs) this.forget(st.mint);
     }
     if (now - this.lastSummaryAt >= this.d.cfg.SUMMARY_INTERVAL_SEC * 1000) {
+      const first = this.lastSummaryAt === 0;
       this.lastSummaryAt = now;
       const s = this.summary();
+      if (!first && this.eventsSinceSummary === 0) {
+        this.d.log.warn("no data received from the feed since the last summary; check your internet connection / PumpPortal");
+      }
       this.d.log.info(
-        `summary: balance ${s.balanceSol.toFixed(4)} SOL | realized ${fmtSol(s.realizedPnlSol)} | today ${fmtSol(s.dailyPnlSol)} | ` +
+        `summary: feed ${this.eventsSinceSummary} events, ${this.newTokensSinceSummary} new tokens | balance ${s.balanceSol.toFixed(4)} SOL | realized ${fmtSol(s.realizedPnlSol)} | today ${fmtSol(s.dailyPnlSol)} | ` +
           `trades ${s.closedTrades} (win ${s.winRatePct.toFixed(0)}%) | open ${s.openPositions.length} | tracking ${s.trackedTokens}`,
       );
+      this.eventsSinceSummary = 0;
+      this.newTokensSinceSummary = 0;
     }
   }
 
